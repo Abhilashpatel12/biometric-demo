@@ -1,36 +1,20 @@
 import { useEffect, useRef } from "react";
 import { useFrameProcessor } from "react-native-vision-camera";
 import {
-    type FrameFaceDetectionOptions,
-    useFaceDetector,
+  type FrameFaceDetectionOptions,
+  useFaceDetector,
 } from "react-native-vision-camera-face-detector";
 import { useSharedValue, Worklets } from "react-native-worklets-core";
 
-/**
- * Liveness Detection Hook - Blink-Based Detection
- *
- * Detects live humans through BLINK only.
- *
- * Why blink only?
- * - Head movement detection is unreliable because phone hand-shake creates fake movement
- * - Facial variance detection is unreliable because camera shake affects readings
- * - BLINK is the only signal that photos CANNOT produce regardless of camera movement
- *
- * User just looks at camera naturally - humans blink every 2-10 seconds.
- */
+const EYE_OPEN_THRESHOLD = 0.6;
+const EYE_CLOSED_THRESHOLD = 0.35;
+const MIN_CLOSED_FRAMES = 2;
+const MIN_OPEN_FRAMES = 3;
 
-// Natural blink detection
-const EYE_OPEN_THRESHOLD = 0.6; // Eyes considered open
-const EYE_CLOSED_THRESHOLD = 0.35; // Eyes considered closed
-const MIN_CLOSED_FRAMES = 2; // Natural blinks are quick
-const MIN_OPEN_FRAMES = 3; // Need eyes open first
+const MIN_DETECTION_FRAMES = 20;
+const NO_FACE_TIMEOUT_FRAMES = 90;
+const PHOTO_TIMEOUT_FRAMES = 180;
 
-// Timing
-const MIN_DETECTION_FRAMES = 20; // ~0.3 sec warm-up
-const NO_FACE_TIMEOUT_FRAMES = 90; // ~1.5 sec - no face = non-human
-const PHOTO_TIMEOUT_FRAMES = 180; // ~3 seconds - no blink = photo
-
-// Result types
 export type LivenessResult = "success" | "photo";
 
 interface UseLivenessDetectionProps {
@@ -40,7 +24,6 @@ interface UseLivenessDetectionProps {
 export const useLivenessDetection = ({
   onResult,
 }: UseLivenessDetectionProps) => {
-  // Create a worklet-compatible JS caller using Worklets.createRunOnJS
   const callOnResult = Worklets.createRunOnJS((result: LivenessResult) => {
     console.log("[LIVENESS-JS] Received result from worklet:", result);
     onResult(result);
@@ -52,13 +35,11 @@ export const useLivenessDetection = ({
   const faceDetectedFrames = useSharedValue(0);
   const noFaceFrames = useSharedValue(0);
 
-  // Blink tracking only
   const eyesClosedFrames = useSharedValue(0);
   const eyesOpenFrames = useSharedValue(0);
   const eyesWereOpen = useSharedValue(false);
   const blinkDetected = useSharedValue(false);
 
-  // Face detector setup
   const faceDetectionOptions = useRef<FrameFaceDetectionOptions>({
     performanceMode: "fast",
     contourMode: "none",
@@ -74,7 +55,6 @@ export const useLivenessDetection = ({
     console.log("[LIVENESS] Hook initialized - Blink-only detection");
   }, []);
 
-  // ==================== FRAME PROCESSOR ====================
   const frameProcessor = useFrameProcessor(
     (frame) => {
       "worklet";
@@ -96,7 +76,6 @@ export const useLivenessDetection = ({
             );
           }
 
-          // FAILURE: No face for too long = Non-human/object
           if (noFaceFrames.value >= NO_FACE_TIMEOUT_FRAMES) {
             console.log(
               `[LIVENESS] NON-HUMAN - No face after ${noFaceFrames.value} frames`,
@@ -108,7 +87,6 @@ export const useLivenessDetection = ({
           return;
         }
 
-        // Face found
         noFaceFrames.value = 0;
         faceDetectedFrames.value += 1;
 
@@ -116,7 +94,6 @@ export const useLivenessDetection = ({
         const leftEyeOpen = face.leftEyeOpenProbability ?? -1;
         const rightEyeOpen = face.rightEyeOpenProbability ?? -1;
 
-        // === BLINK DETECTION ===
         if (leftEyeOpen >= 0 && rightEyeOpen >= 0) {
           const avgEyeOpen = (leftEyeOpen + rightEyeOpen) / 2;
           const eyesOpen = avgEyeOpen > EYE_OPEN_THRESHOLD;
@@ -127,7 +104,7 @@ export const useLivenessDetection = ({
             if (eyesOpenFrames.value >= MIN_OPEN_FRAMES) {
               eyesWereOpen.value = true;
             }
-            // Blink complete: was open → closed → now open again
+
             if (
               eyesClosedFrames.value >= MIN_CLOSED_FRAMES &&
               eyesWereOpen.value &&
@@ -143,17 +120,14 @@ export const useLivenessDetection = ({
           }
         }
 
-        // === DEBUG LOG ===
         if (totalFrames.value % 30 === 1) {
           console.log(
             `[LIVENESS] Frame ${faceDetectedFrames.value}/${PHOTO_TIMEOUT_FRAMES} | Eyes L:${leftEyeOpen.toFixed(2)} R:${rightEyeOpen.toFixed(2)} | Blink:${blinkDetected.value}`,
           );
         }
 
-        // === DECISION LOGIC ===
         if (faceDetectedFrames.value < MIN_DETECTION_FRAMES) return;
 
-        // SUCCESS: Blink detected = Live human
         if (blinkDetected.value) {
           console.log(
             `[LIVENESS] SUCCESS - Blink detected at frame ${faceDetectedFrames.value}`,
@@ -163,7 +137,6 @@ export const useLivenessDetection = ({
           return;
         }
 
-        // FAILURE: No blink after timeout = Photo
         if (faceDetectedFrames.value >= PHOTO_TIMEOUT_FRAMES) {
           console.log(
             `[LIVENESS] PHOTO - No blink after ${faceDetectedFrames.value} frames`,
@@ -179,7 +152,6 @@ export const useLivenessDetection = ({
     [detectFaces, callOnResult],
   );
 
-  // Reset function
   const resetDetection = () => {
     console.log("[LIVENESS] Resetting...");
     isFinished.value = false;
