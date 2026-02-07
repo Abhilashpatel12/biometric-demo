@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "biometric-demo",
+    "name": "biometric-auth",
     "slug": "biometric-demo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -38,7 +38,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000000",

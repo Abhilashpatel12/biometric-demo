@@ -11,6 +11,7 @@ import {
 import {
     Camera,
     useCameraDevice,
+    useCameraFormat,
     useCameraPermission,
 } from "react-native-vision-camera";
 import FlashOverlay from "../components/FlashOverlay";
@@ -28,6 +29,9 @@ import { DemoState, DemoType } from "../types/demo.types";
 export default function CameraDemoScreen() {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("front");
+  const format = useCameraFormat(device, [
+    { videoResolution: { width: 1280, height: 720 } },
+  ]);
 
   // Demo State
   const [demoState, setDemoState] = useState<DemoState>("idle");
@@ -238,7 +242,9 @@ export default function CameraDemoScreen() {
         <Camera
           style={StyleSheet.absoluteFill}
           device={device}
+          format={format}
           isActive={true}
+          outputOrientation="preview"
           {...(frameProcessor ? { frameProcessor } : {})}
           pixelFormat="yuv" // High performance
         />
