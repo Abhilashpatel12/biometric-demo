@@ -10,8 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.abhilashpatel.biometricdemo",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app requires camera access for biometric authentication demonstration."
+        "NSCameraUsageDescription": "This app requires camera access for biometric authentication demonstration.",
+        "NSMicrophoneUsageDescription": "This app requires microphone access for video recording.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -62,6 +65,9 @@
             "targetSdkVersion": 35,
             "compileSdkVersion": 35,
             "ndkVersion": "27.0.12077973"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
           }
         }
       ],
