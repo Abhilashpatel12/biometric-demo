@@ -1,4 +1,9 @@
-export type DemoState = "idle" | "preparing" | "scanning" | "result";
+export type DemoState =
+  | "waiting"
+  | "idle"
+  | "preparing"
+  | "scanning"
+  | "result";
 
 export type DemoType = "success" | "photo" | "deepfake";
 

@@ -13,9 +13,9 @@ const MIN_CLOSED_FRAMES = 2;
 const MIN_OPEN_FRAMES = 3;
 
 // Extended timeouts for easier user experience
-const MIN_DETECTION_FRAMES = 15;     // Start checking slightly sooner
-const NO_FACE_TIMEOUT_FRAMES = 150;  // ~5 seconds to position face
-const PHOTO_TIMEOUT_FRAMES = 300;    // ~10 seconds to blink
+const MIN_DETECTION_FRAMES = 15; // Start checking slightly sooner
+const NO_FACE_TIMEOUT_FRAMES = 90; // ~3 seconds to position face
+const PHOTO_TIMEOUT_FRAMES = 230; // ~7 seconds to blink
 
 export type LivenessResult = "success" | "photo";
 

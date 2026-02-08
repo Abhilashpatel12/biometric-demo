@@ -1,28 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
-    Pressable,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
-    Camera,
-    useCameraDevice,
-    useCameraFormat,
-    useCameraPermission,
+  Camera,
+  useCameraDevice,
+  useCameraFormat,
+  useCameraPermission,
 } from "react-native-vision-camera";
 import FlashOverlay from "../components/FlashOverlay";
 import MetricsOverlay from "../components/MetricsOverlay";
 
 import ResultOverlay from "../components/ResultOverlay";
 import ScanAnimation from "../components/ScanAnimation";
-import { COLORS, FONTS, TIMING } from "../constants/theme";
+import { COLORS, FONTS } from "../constants/theme";
 import {
-    LivenessResult,
-    useLivenessDetection,
+  LivenessResult,
+  useLivenessDetection,
 } from "../hooks/useLivenessDetection";
 import { DemoState, DemoType } from "../types/demo.types";
 
@@ -34,7 +32,7 @@ export default function CameraDemoScreen() {
   ]);
 
   // Demo State
-  const [demoState, setDemoState] = useState<DemoState>("idle");
+  const [demoState, setDemoState] = useState<DemoState>("waiting");
   const [demoType, setDemoType] = useState<DemoType>("success");
 
   const [showFlash, setShowFlash] = useState(false);
@@ -42,9 +40,9 @@ export default function CameraDemoScreen() {
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Tap Gesture Tracking
-  const tapCount = useRef(0);
-  const lastTapTime = useRef(0);
+  // Deepfake triple-tap tracking
+  const deepfakeTapCount = useRef(0);
+  const deepfakeLastTap = useRef(0);
 
   // ===== LIVENESS DETECTION CALLBACK =====
   // This is called directly from the worklet via Worklets.createRunOnJS
@@ -71,7 +69,7 @@ export default function CameraDemoScreen() {
   });
 
   // Ref for manual triggers (triple tap)
-  const startSequenceRef = useRef<(type: DemoType) => void>(() => {});
+  const startSequenceRef = useRef<(type: DemoType) => void>(() => { });
 
   useEffect(() => {
     if (!hasPermission) {
@@ -94,27 +92,26 @@ export default function CameraDemoScreen() {
     }
   }, [demoState, resetDetection]);
 
-  // Auto-Reset Result after 3 seconds
-  useEffect(() => {
-    if (demoState === "result") {
-      const timer = setTimeout(() => {
-        resetDemo();
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [demoState]);
+  // Result stays fixed until user presses Reset button
 
   const resetDemo = () => {
     console.log("JS: Resetting Demo...");
-    setDemoState("idle");
+    setDemoState("waiting");
     setStatusMessage(null);
+    setShowFlash(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     resetDetection();
   };
 
+  const startDetection = () => {
+    console.log("JS: Start button pressed -> Begin detection");
+    resetDetection();
+    setDemoState("idle");
+  };
+
   const startDemoSequence = (type: DemoType) => {
     console.log("JS: startDemoSequence triggered for:", type);
-    if (demoState !== "idle") return;
+    if (demoState !== "idle" && demoState !== "waiting") return;
 
     setDemoType(type);
     setDemoState("preparing");
@@ -130,13 +127,8 @@ export default function CameraDemoScreen() {
       // Success (Live) or Deepfake (Manual)
       setStatusMessage("生体反応を確認中...");
 
-      // Random delay before flash/scan
-      const randomDelay =
-        Math.random() * (TIMING.randomDelayMax - TIMING.randomDelayMin) +
-        TIMING.randomDelayMin;
-      timeoutRef.current = setTimeout(() => {
-        setShowFlash(true);
-      }, randomDelay);
+      // Trigger flash immediately (no delay)
+      setShowFlash(true);
     }
   };
 
@@ -159,13 +151,8 @@ export default function CameraDemoScreen() {
         // Success (Live) or Deepfake (Manual)
         setStatusMessage("生体反応を確認中...");
 
-        // Random delay before flash/scan
-        const randomDelay =
-          Math.random() * (TIMING.randomDelayMax - TIMING.randomDelayMin) +
-          TIMING.randomDelayMin;
-        timeoutRef.current = setTimeout(() => {
-          setShowFlash(true);
-        }, randomDelay);
+        // Trigger flash immediately (no delay)
+        setShowFlash(true);
       }
     }
   }, [demoState, demoType]);
@@ -196,46 +183,8 @@ export default function CameraDemoScreen() {
       </View>
     );
 
-  const handleTap = (evt: any) => {
-    const now = Date.now();
-    const locationX = evt.nativeEvent.locationX;
-    const screenWidth = Dimensions.get("window").width;
-
-    // GLOBAL TAP COUNTER (Works in ANY state to unfreeze app)
-    if (now - lastTapTime.current < 500) {
-      tapCount.current += 1;
-    } else {
-      tapCount.current = 1;
-    }
-    lastTapTime.current = now;
-
-    // 1. Double Tap -> FORCE RESET (Panic Button)
-    if (tapCount.current === 2) {
-      console.log("JS: Double Tap -> Manual Reset");
-      resetDemo();
-    }
-
-    // 2. Triple Tap -> Hidden Override (Triggers Flow)
-    if (tapCount.current === 3) {
-      console.log("JS: Triple Tap Detected!");
-      if (locationX < screenWidth / 2) {
-        console.log("JS: Left Side -> Force SUCCESS");
-        startSequenceRef.current("success");
-      } else {
-        console.log("JS: Right Side -> Force PHOTO ATTACK");
-        startSequenceRef.current("photo");
-      }
-      tapCount.current = 0; // Reset counter
-    }
-
-    // 3. Single Tap on Result Screen (Preserve old behavior)
-    if (tapCount.current === 1 && demoState === "result") {
-      resetDemo();
-    }
-  };
-
   return (
-    <Pressable onPress={handleTap} style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.container}>
         <StatusBar hidden />
 
@@ -245,25 +194,60 @@ export default function CameraDemoScreen() {
           format={format}
           isActive={true}
           outputOrientation="preview"
-          {...(frameProcessor ? { frameProcessor } : {})}
+          androidPreviewViewType="texture-view"
+          {...(demoState === "idle" && frameProcessor
+            ? { frameProcessor }
+            : {})}
           pixelFormat="yuv" // High performance
         />
 
         {/* Overlays */}
-        {demoState === "idle" && (
-          <View style={styles.idleOverlay}>
-            <View style={styles.cornerTL} />
-            <View style={styles.cornerTR} />
-            <View style={styles.cornerBL} />
-            <View style={styles.cornerBR} />
+        {(demoState === "waiting" ||
+          demoState === "idle" ||
+          demoState === "preparing") && (
+            <View style={styles.idleOverlay}>
+              <View style={styles.cornerTL} />
+              <View style={styles.cornerTR} />
+              <View style={styles.cornerBL} />
+              <View style={styles.cornerBR} />
 
-            {/* MANUAL OVERRIDE: Deepfake (Bottom-Left) */}
-            <TouchableOpacity
-              style={[styles.tapZone, styles.bottomLeft]}
-              onPress={() => startDemoSequence("deepfake")}
-            />
-          </View>
-        )}
+              {/* Start Button - only in waiting state */}
+              {demoState === "waiting" && (
+                <TouchableOpacity
+                  style={styles.startButton}
+                  onPress={startDetection}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.startButtonText}>スタート</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Scanning indicator - only in idle/detection state */}
+              {demoState === "idle" && (
+                <Text style={styles.idleText}>検出中...</Text>
+              )}
+
+              {/* MANUAL OVERRIDE: Deepfake (Bottom-Left) - Triple tap */}
+              {demoState === "idle" && (
+                <TouchableOpacity
+                  style={[styles.tapZone, styles.bottomLeft]}
+                  onPress={() => {
+                    const now = Date.now();
+                    if (now - deepfakeLastTap.current < 500) {
+                      deepfakeTapCount.current += 1;
+                    } else {
+                      deepfakeTapCount.current = 1;
+                    }
+                    deepfakeLastTap.current = now;
+                    if (deepfakeTapCount.current >= 3) {
+                      deepfakeTapCount.current = 0;
+                      startDemoSequence("deepfake");
+                    }
+                  }}
+                />
+              )}
+            </View>
+          )}
 
         {/* {demoState === 'preparing' && statusMessage && (
                     <View style={styles.statusContainer}>
@@ -293,7 +277,7 @@ export default function CameraDemoScreen() {
           <Text style={styles.footerText}>特許出願中</Text>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -351,6 +335,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.white,
     opacity: 0.5,
+  },
+  startButton: {
+    position: "absolute",
+    bottom: 80,
+    alignSelf: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    backgroundColor: COLORS.green,
+    borderRadius: 12,
+  },
+  startButtonText: {
+    fontFamily: FONTS.monospace,
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.background,
+    letterSpacing: 4,
   },
   cornerTL: {
     position: "absolute",
